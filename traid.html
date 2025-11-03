@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="pl" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Symulator walut — 3 style wykresu</title>
+  <style>
+    :root{
+      --bg: #0f1226;
+      --surface: rgba(255,255,255,0.08);
+      --glass: rgba(255,255,255,0.12);
+      --text: #eef1fb;
+      --muted: #a8b0d5;
+      --accent: #7c5cff;
+      --accent2: #30d0ff;
+      --buy: #2ee6a6;
+      --sell: #ff6b6b;
+      --border: rgba(255,255,255,0.14);
+    }
+    :root[data-theme="light"]{
+      --bg: #f6f8ff;
+      --surface: #ffffff;
+      --glass: #ffffff;
+      --text: #0b0e1c;
+      --muted: #5f6590;
+      --accent: #5a48ff;
+      --accent2: #19b7ff;
+      --buy: #0ea66a;
+      --sell: #d64b4b;
+      --border: rgba(10,14,28,0.12);
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%; margin:0; font-family: Inter, system-ui, Segoe UI, Roboto, Arial, sans-serif; color:var(--text); background: var(--bg);}
+    .wrap{max-width:1100px; margin:0 auto; padding:16px}
+
+    header{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 0}
+    .brand{display:flex; align-items:center; gap:10px}
+    .logo{
+      width:38px; height:38px; border-radius:12px; font-weight:800; color:#0b0e1c;
+      display:grid; place-items:center; box-shadow: 0 8px 20px rgba(124,92,255,0.25);
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+    }
+    .title{display:flex; flex-direction:column}
+    .title h1{font-size:18px; margin:0}
+    .title .sub{font-size:12px; color:var(--muted)}
+    .toolbar{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+    .pill{
+      display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:12px;
+      background: var(--surface); border:1px solid var(--border); font-size:12px;
+    }
+    .toggle{cursor:pointer; user-select:none;}
+
+    .grid{display:grid; grid-template-columns: 1.2fr 1fr; gap:14px}
+    @media (max-width:900px){ .grid{grid-template-columns:1fr} }
+
+    .card{
+      background: var(--surface); border:1px solid var(--border); border-radius:16px; padding:12px;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+      backdrop-filter: saturate(140%) blur(8px);
+    }
+    .card h2{font-size:16px; margin:0 0 8px}
+
+    /* Lista walut */
+    .assets{display:grid; grid-template-columns: repeat(5, 1fr); gap:8px}
+    @media (max-width:900px){ .assets{grid-template-columns: repeat(3, 1fr)} }
+    @media (max-width:520px){ .assets{grid-template-columns: repeat(2, 1fr)} }
+    .asset{
+      border-radius:12px; padding:10px; background: var(--glass);
+      border:1px solid var(--border); cursor:pointer;
+      display:flex; flex-direction:column; gap:6px; transition: transform .15s ease, box-shadow .2s ease, border-color .2s ease;
+    }
+    .asset:hover{ transform: translateY(-2px); box-shadow: 0 10px 22px rgba(48,208,255,0.18); }
+    .asset.active{ border-color: var(--accent2); box-shadow: 0 0 0 2px rgba(48,208,255,0.35) inset; }
+    .asset .top{display:flex; align-items:center; justify-content:space-between}
+    .badge{display:flex; align-items:center; gap:6px; font-weight:700}
+    .icon{
+      width:24px; height:24px; border-radius:8px; display:grid; place-items:center; font-size:13px; font-weight:800;
+      background: linear-gradient(135deg, rgba(124,92,255,0.25), rgba(48,208,255,0.25));
+      border:1px solid var(--border);
+    }
+    .price{font-weight:700}
+    .change{font-size:12px}
+
+    /* Wykres */
+    .chart-wrap{ position:relative; height:260px; border-radius:14px; overflow:hidden; background: linear-gradient(180deg, rgba(48,208,255,0.08), rgba(124,92,255,0.06)); border:1px solid var(--border) }
+    canvas{ width:100%; height:100% }
+    .chart-legend{
+      position:absolute; top:8px; left:8px; font-size:12px; color:var(--muted);
+      background: var(--surface); padding:6px 8px; border-radius:10px; border:1px solid var(--border);
+    }
+    .chart-controls{
+      position:absolute; top:8px; right:8px; display:flex; gap:6px; align-items:center;
+    }
+    .select{
+      background: var(--surface); border:1px solid var(--border); color:var(--text); padding:6px 8px; border-radius:10px; font-size:12px;
+    }
+
+    /* Panel transakcyjny */
+    .panel{display:grid; grid-template-columns: 1fr; gap:10px}
+    .field{display:flex; flex-direction:column; gap:6px}
+    .field label{font-size:12px; color:var(--muted)}
+    input, select{
+      background: var(--surface); border:1px solid var(--border);
+      color: var(--text); padding: 10px 12px; border-radius:12px; outline:none;
+    }
+    input::placeholder{color:var(--muted)}
+    .actions{display:flex; gap:8px}
+    @media (max-width:520px){ .actions{flex-direction:column} }
+    button{
+      padding:10px 14px; border-radius:12px; border:1px solid var(--border);
+      color:#fff; font-weight:800; cursor:pointer; transition: transform .1s ease, box-shadow .15s ease, filter .15s ease;
+    }
+    .buy{ background: linear-gradient(135deg, #26d5c1, #2ee6a6); box-shadow: 0 10px 22px rgba(46,230,166,0.35); color:#072018 }
+    .sell{ background: linear-gradient(135deg, #ff8b8b, #ff6b6b); box-shadow: 0 10px 22px rgba(255,107,107,0.35); color:#2a0c0c }
+    .reset{ background: linear-gradient(135deg, #ffd166, #f4a261); box-shadow: 0 10px 22px rgba(244,162,97,0.35); color:#2a200c }
+
+    /* Tabela portfela */
+    .table{width:100%; border-collapse:collapse}
+    .table th, .table td{ padding:8px 6px; border-bottom:1px dashed var(--border); text-align:left; font-size:13px }
+    .table th{ color:var(--muted); font-weight:600 }
+
+    footer{ margin-top:12px; color:var(--muted); font-size:12px }
+
+    .notice{
+      background: var(--surface); border:1px dashed var(--border);
+      color: var(--muted); padding:10px; border-radius:12px; font-size:12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <div class="logo">Δ</div>
+        <div class="title">
+          <h1>Symulator walut</h1>
+          <div class="sub">Tylko FX, bez prawdziwych pieniędzy</div>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="pill">Saldo: <strong id="cash">10000.00</strong> USD</div>
+        <div class="pill toggle" id="themeToggle">Tryb: <strong id="themeLabel">Ciemny</strong></div>
+      </div>
+    </header>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Rynek i wykres</h2>
+        <div class="assets" id="assets"></div>
+        <div class="chart-wrap">
+          <canvas id="chart"></canvas>
+          <div class="chart-legend" id="legend">—</div>
+          <div class="chart-controls">
+            <select class="select" id="lineStyle">
+              <option value="solid">Linia: pełna</option>
+              <option value="dashed">Linia: przerywana</option>
+              <option value="colored">Linie zielone/czerwone</option>
+            </select>
+            <select class="select" id="assetSelect"></select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Panel transakcyjny</h2>
+        <div class="panel">
+          <div class="field">
+            <label>Ilość</label>
+            <input id="qty" type="number" min="0" step="0.0001" placeholder="np. 100" />
+          </div>
+          <div class="pill">Cena: <span id="price">—</span></div>
+          <div class="pill">Wartość: <span id="value">—</span></div>
+          <div class="actions">
+            <button class="buy" id="buyBtn">Kup</button>
+            <button class="sell" id="sellBtn">Sprzedaj</button>
+            <button class="reset" id="resetBtn">Reset</button>
+          </div>
+          <div class="notice">Edukacyjna symulacja walut. Ceny generowane losowo.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h2>Portfel</h2>
+      <table class="table" id="portfolio">
+        <thead>
+          <tr>
+            <th>Waluta</th>
+            <th>Ilość</th>
+            <th>Cena</th>
+            <th>Wartość</th>
+            <th>P/L</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+        <tfoot>
+          <tr>
+            <th colspan="3">Łączna wartość portfela</th>
+            <th id="totalValue">—</th>
+            <th id="totalPL">—</th>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <footer>
+      Zrobione dla nauki. Nie stanowi porady inwestycyjnej.
+    </footer>
+  </div>
+
+  <script>
+    // --- Konfiguracja walut ---
+    const FX = [
+      {id:'USD', name:'US Dollar', emoji:'$', basePrice: 1.00, volatility: 0.002},   // baza
+      {id:'EUR', name:'Euro', emoji:'€', basePrice: 1.08, volatility: 0.003},
+      {id:'GBP', name:'British Pound', emoji:'£', basePrice: 1.27, volatility: 0.0032},
+      {id:'JPY', name:'Japanese Yen', emoji:'¥', basePrice: 0.0066, volatility: 0.004},
+      {id:'PLN', name:'Polish Zloty', emoji:'zł', basePrice: 0.25, volatility: 0.0035}
+    ];
+
+    // --- Stan ---
+    let state = {
+      cash: 10000,
+      selected: 'EUR',
+      prices: {},
+      history: {},
+      holdings: {},
+      avgPrice: {},
+      lineStyle: 'solid'
+    };
+
+    // Inicjalizacja
+    FX.forEach(a=>{
+      state.prices[a.id] = a.basePrice * (1 + (Math.random()-0.5)*a.volatility*10);
+      state.history[a.id] = Array.from({length: 100}, ()=> a.basePrice * (1 + (Math.random()-0.5)*a.volatility*10));
+      state.holdings[a.id] = 0;
+      state.avgPrice[a.id] = 0;
+    });
+
+    // --- DOM ---
+    const elAssets = document.getElementById('assets');
+    const elCash = document.getElementById('cash');
+    const elAssetSelect = document.getElementById('assetSelect');
+    const elPrice = document.getElementById('price');
+    const elValue = document.getElementById('value');
+    const elQty = document.getElementById('qty');
+    const elBuy = document.getElementById('buyBtn');
+    const elSell = document.getElementById('sellBtn');
+    const elReset = document.getElementById('resetBtn');
+    const elPortfolio = document.getElementById('portfolio').querySelector('tbody');
+    const elTotalValue = document.getElementById('totalValue');
+    const elTotalPL = document.getElementById('totalPL');
+    const legend = document.getElementById('legend');
+    const lineStyleSel = document.getElementById('lineStyle');
+    const themeToggle = document.getElementById('themeToggle');
+    const themeLabel = document.getElementById('themeLabel');
+
+    // --- Motyw ---
+    function applyTheme(t){
+      document.documentElement.setAttribute('data-theme', t);
+      themeLabel.textContent = t==='dark' ? 'Ciemny' : 'Jasny';
+    }
+    themeToggle.onclick = ()=>{
+      const current = document.documentElement.getAttribute('data-theme') || 'dark';
+      applyTheme(current === 'dark' ? 'light' : 'dark');
+      drawChart();
+    };
+
+    // --- UI: lista walut ---
+    function renderAssets(){
+      elAssets.innerHTML = '';
+      FX.forEach(a=>{
+        const price = state.prices[a.id];
+        const hist = state.history[a.id];
+        const prev = hist[hist.length-2];
+        const change = ((price - prev)/prev)*100;
+        const card = document.createElement('div');
+        card.className = 'asset' + (state.selected===a.id ? ' active':'');
+        card.onclick = ()=> selectAsset(a.id);
+        card.innerHTML = `
+          <div class="top">
+            <div class="badge"><div class="icon">${a.emoji}</div> <span>${a.id}</span></div>
+            <div class="price">$${format(price)}</div>
+          </div>
+          <div class="change" style="color:${change>=0?'var(--buy)':'var(--sell)'}">
+            ${change>=0?'+':''}${change.toFixed(2)}%
+          </div>
+          <div class="muted">${a.name}</div>
+        `;
+        elAssets.appendChild(card);
+      });
+    }
+
+    function selectAsset(id){
+      state.selected = id;
+      renderAssets();
+      elAssetSelect.value = id;
+      updateTradePanel();
+      drawChart();
+    }
+
+    // --- Selecty ---
+    function renderSelect(){
+      elAssetSelect.innerHTML = FX.map(a=> `<option value="${a.id}">${a.id} — ${a.name}</option>`).join('');
+      elAssetSelect.value = state.selected;
+      elAssetSelect.onchange = (e)=> selectAsset(e.target.value);
+      lineStyleSel.onchange = (e)=>{ state.lineStyle = e.target.value; drawChart(); };
+    }
+
+    // --- Panel transakcyjny ---
+    function updateTradePanel(){
+      const p = state.prices[state.selected];
+      elPrice.textContent = `$${format(p)}`;
+      const qty = parseFloat(elQty.value||0);
+      elValue.textContent = qty>0 ? `$${format(qty*p)}` : '—';
+      legend.textContent = `${state.selected} | cena: $${format(p)} | ilość: ${format(state.holdings[state.selected])}`;
+    }
+    elQty.addEventListener('input', updateTradePanel);
+
+    // --- Transakcje ---
+    elBuy.onclick = ()=>{
+      const qty = parseFloat(elQty.value||0);
+      if(qty<=0) return toast('Podaj ilość większą od zera.');
+      const price = state.prices[state.selected];
+      const cost = qty * price;
+      if(cost > state.cash) return toast('Za mało środków.');
+      const prevQty = state.holdings[state.selected];
+      const prevCost = prevQty * state.avgPrice[state.selected];
+      const newQty = prevQty + qty;
+      const newCost = prevCost + cost;
+      state.avgPrice[state.selected] = newQty ? (newCost / newQty) : 0;
+      state.holdings[state.selected] = newQty;
+      state.cash -= cost;
+      elQty.value = '';
+      updateAll();
+      toast(`Kupiono ${qty} ${state.selected} za $${format(cost)}.`);
+    };
+
+    elSell.onclick = ()=>{
+      const qty = parseFloat(elQty.value||0);
+      if(qty<=0) return toast('Podaj ilość większą od zera.');
+      const have = state.holdings[state.selected];
+      if(qty > have) return toast('Brak wystarczającej ilości do sprzedaży.');
+      const price = state.prices[state.selected];
+      const revenue = qty * price;
+      state.holdings[state.selected] = have - qty;
+      state.cash += revenue;
+      elQty.value = '';
+      updateAll();
+      toast(`Sprzedano ${qty} ${state.selected} za $${format(revenue)}.`);
+    };
+
+    elReset.onclick = ()=>{
+      if(!confirm('Zresetować symulację?')) return;
+      state.cash = 10000;
+      FX.forEach(a=>{
+        state.prices[a.id] = a.basePrice * (1 + (Math.random()-0.5)*a.volatility*10);
+        state.history[a.id] = Array.from({length: 100}, ()=> a.basePrice * (1 + (Math.random()-0.5)*a.volatility*10));
+        state.holdings[a.id] = 0;
+        state.avgPrice[a.id] = 0;
+      });
+      updateAll();
+      toast('Zresetowano.');
+    };
+
+    // --- Wykres ---
+    const canvas = document.getElementById('chart');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas(){
+      const rect = canvas.parentElement.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(rect.width * dpr);
+      canvas.height = Math.floor(rect.height * dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      drawChart();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    function drawChart(){
+      const id = state.selected;
+      const data = state.history[id];
+      const min = Math.min(...data);
+      const max = Math.max(...data);
+      const pad = 14;
+      const cw = canvas.clientWidth;
+      const ch = canvas.clientHeight;
+
+      ctx.clearRect(0,0,cw,ch);
+
+      // Siatka
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || 'rgba(255,255,255,0.12)';
+      ctx.lineWidth = 1;
+      for(let i=0;i<5;i++){
+        const y = pad + (i/4) * (ch - pad*2);
+        ctx.beginPath();
+        ctx.moveTo(pad, y);
+        ctx.lineTo(cw - pad, y);
+        ctx.stroke();
+      }
+
+      // Rysowanie linii w zależności od stylu
+      if(state.lineStyle === 'colored'){
+        // Kolorowe odcinki: zielony gdy rośnie, czerwony gdy spada
+        ctx.setLineDash([]);
+        ctx.lineWidth = 2.2;
+        for(let i=1;i<data.length;i++){
+          const x1 = pad + ((i-1)/(data.length-1)) * (cw - pad*2);
+          const y1 = map(data[i-1], min, max, ch - pad, pad);
+          const x2 = pad + (i/(data.length-1)) * (cw - pad*2);
+          const y2 = map(data[i], min, max, ch - pad, pad);
+          ctx.strokeStyle = (data[i] >= data[i-1]) ? getComputedStyle(document.documentElement).getPropertyValue('--buy').trim() : getComputedStyle(document.documentElement).getPropertyValue('--sell').trim();
+          ctx.beginPath();
+          ctx.moveTo(x1,y1);
+          ctx.lineTo(x2,y2);
+          ctx.stroke();
+        }
+        // Bez wypełnienia pod linią w tym trybie dla czytelności
+      } else {
+        // Linia pełna lub przerywana z gradientem
+        if(state.lineStyle === 'solid'){
+          ctx.setLineDash([]);
+        } else if(state.lineStyle === 'dashed'){
+          ctx.setLineDash([6,4]);
+        }
+        const grad = ctx.createLinearGradient(0,0,cw,0);
+        grad.addColorStop(0, getComputedStyle(document.documentElement).getPropertyValue('--accent2').trim() || '#30d0ff');
+        grad.addColorStop(1, getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#7c5cff');
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        data.forEach((v, i)=>{
+          const x = pad + (i/(data.length-1)) * (cw - pad*2);
+          const y = map(v, min, max, ch - pad, pad);
+          if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+        });
+        ctx.stroke();
+
+        // Wypełnienie pod linią (tylko dla solid/dashed)
+        ctx.setLineDash([]);
+        ctx.lineTo(cw - pad, ch - pad);
+        ctx.lineTo(pad, ch - pad);
+        ctx.closePath();
+        const fillGrad = ctx.createLinearGradient(0,0,0,ch);
+        fillGrad.addColorStop(0,'rgba(48,208,255,0.20)');
+        fillGrad.addColorStop(1,'rgba(124,92,255,0.05)');
+        ctx.fillStyle = fillGrad;
+        ctx.fill();
+      }
+
+      // Ostatni punkt (mark)
+      const lastY = map(data[data.length-1], min, max, ch - pad, pad);
+      const xLast = pad + ( (data.length-1)/(data.length-1) ) * (cw - pad*2);
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent2').trim() || '#30d0ff';
+      ctx.beginPath();
+      ctx.arc(xLast, lastY, 3.5, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // --- Symulacja cen ---
+    function tick(){
+      FX.forEach(a=>{
+        const prev = state.prices[a.id];
+        const noise = (Math.random()-0.5) * a.volatility * prev;
+        const drift = (a.basePrice - prev) * 0.0006;
+        let next = Math.max(0.00001, prev + noise + drift);
+        state.prices[a.id] = next;
+        const arr = state.history[a.id];
+        arr.push(next);
+        if(arr.length>120) arr.shift();
+      });
+      renderAssets();
+      updateAll(false);
+      drawChart();
+    }
+
+    // --- Portfel ---
+    function renderPortfolio(){
+      elPortfolio.innerHTML = '';
+      let total = 0, totalPL = 0;
+      FX.forEach(a=>{
+        const qty = state.holdings[a.id];
+        const price = state.prices[a.id];
+        const value = qty * price;
+        const avg = state.avgPrice[a.id] || 0;
+        const pl = value - qty*avg;
+
+        total += value;
+        totalPL += pl;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><span class="pill">${a.id}</span></td>
+          <td>${format(qty)}</td>
+          <td>$${format(price)}</td>
+          <td>$${format(value)}</td>
+          <td style="color:${pl>=0?'var(--buy)':'var(--sell)'}">${pl>=0?'+':''}$${format(pl)}</td>
+        `;
+        elPortfolio.appendChild(tr);
+      });
+      elTotalValue.textContent = `$${format(total)}`;
+      elTotalPL.textContent = `${totalPL>=0?'+':''}$${format(totalPL)}`;
+      elCash.textContent = format(state.cash);
+    }
+
+    // --- Toast ---
+    let toastTimer = null;
+    function toast(msg){
+      clearTimeout(toastTimer);
+      const div = document.createElement('div');
+      div.textContent = msg;
+      div.style.position='fixed';
+      div.style.left='50%';
+      div.style.bottom='20px';
+      div.style.transform='translateX(-50%)';
+      div.style.background='rgba(0,0,0,0.7)';
+      div.style.color='#fff';
+      div.style.padding='10px 14px';
+      div.style.border='1px solid rgba(255,255,255,0.2)';
+      div.style.borderRadius='10px';
+      div.style.fontSize='13px';
+      div.style.boxShadow='0 10px 20px rgba(0,0,0,0.35)';
+      document.body.appendChild(div);
+      toastTimer = setTimeout(()=> div.remove(), 2200);
+    }
+
+    // --- Utils ---
+    function map(v, a, b, c, d){ return c + ( (v - a) / (b - a) ) * (d - c); }
+    function format(n){
+      const abs = Math.abs(n);
+      if(abs >= 1000) return n.toLocaleString(undefined, {maximumFractionDigits:2});
+      if(abs >= 1)    return n.toLocaleString(undefined, {maximumFractionDigits:4});
+      if(abs >= 0.01) return n.toLocaleString(undefined, {maximumFractionDigits:5});
+      return n.toLocaleString(undefined, {maximumFractionDigits:6});
+    }
+
+    function updateAll(){ renderPortfolio(); updateTradePanel(); }
+
+    // --- Start ---
+    renderAssets();
+    renderSelect();
+    resizeCanvas();
+    updateAll();
+    applyTheme('dark'); // domyślnie ciemny
+
+    // --- Pętla ---
+    setInterval(tick, 1200);
+  </script>
+</body>
+</html>
